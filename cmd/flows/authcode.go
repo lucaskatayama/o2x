@@ -57,8 +57,9 @@ func (f *AuthCodeFlow) Authorize(ctx context.Context, cfg *flow.Config) (*flow.T
 		oauth2.SetAuthURLParam("code_challenge", challenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"))
 
+	fmt.Printf("Authorization URL: %s\n", authURL)
 	if err := browser.Open(authURL); err != nil {
-		fmt.Printf("Open this URL manually: %s\n", authURL)
+		fmt.Printf("Failed to open browser. Please open the URL manually.\n")
 	}
 
 	code, returnedState, err := cb.Wait(ctx)

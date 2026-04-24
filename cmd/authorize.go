@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/lucaskatayama/oauth2-cli/internal/flow"
 	"github.com/lucaskatayama/oauth2-cli/internal/storage"
 )
@@ -27,13 +26,6 @@ func init() {
 	authorizeCmd.Flags().String("scope", "openid profile email", "OAuth2 scopes")
 	authorizeCmd.Flags().String("redirect-uri", "o2x://callback", "OAuth2 redirect URI")
 	authorizeCmd.Flags().StringVarP(&flowName, "flow", "f", "authorization_code", "OAuth2 flow")
-
-	viper.BindPFlag("auth-url", authorizeCmd.Flags().Lookup("auth-url"))
-	viper.BindPFlag("token-url", authorizeCmd.Flags().Lookup("token-url"))
-	viper.BindPFlag("client-id", authorizeCmd.Flags().Lookup("client-id"))
-	viper.BindPFlag("client-secret", authorizeCmd.Flags().Lookup("client-secret"))
-	viper.BindPFlag("scope", authorizeCmd.Flags().Lookup("scope"))
-	viper.BindPFlag("redirect-uri", authorizeCmd.Flags().Lookup("redirect-uri"))
 }
 
 func runAuthorize(cmd *cobra.Command, args []string) error {
@@ -46,12 +38,12 @@ func runAuthorize(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := &flow.Config{
-		AuthURL:      viper.GetString("auth-url"),
-		TokenURL:     viper.GetString("token-url"),
-		ClientID:     viper.GetString("client-id"),
-		ClientSecret: viper.GetString("client-secret"),
-		Scope:        viper.GetString("scope"),
-		RedirectURI:  viper.GetString("redirect-uri"),
+		AuthURL:      mustGetString(cmd, "auth-url"),
+		TokenURL:     mustGetString(cmd, "token-url"),
+		ClientID:     mustGetString(cmd, "client-id"),
+		ClientSecret: mustGetString(cmd, "client-secret"),
+		Scope:        mustGetString(cmd, "scope"),
+		RedirectURI:  mustGetString(cmd, "redirect-uri"),
 	}
 
 	tok, err := f.Authorize(ctx, cfg)
@@ -69,4 +61,9 @@ func runAuthorize(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Authorization successful!")
 	return nil
+}
+
+func mustGetString(cmd *cobra.Command, name string) string {
+	val, _ := cmd.Flags().GetString(name)
+	return val
 }

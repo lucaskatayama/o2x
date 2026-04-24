@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/lucaskatayama/oauth2-cli/internal/flow"
 	"github.com/lucaskatayama/oauth2-cli/internal/storage"
 )
@@ -22,11 +21,7 @@ func init() {
 	refreshCmd.Flags().String("client-id", "", "OAuth2 client ID")
 	refreshCmd.Flags().String("client-secret", "", "OAuth2 client secret")
 	refreshCmd.Flags().String("scope", "openid profile email", "OAuth2 scopes")
-
-	viper.BindPFlag("token-url", refreshCmd.Flags().Lookup("token-url"))
-	viper.BindPFlag("client-id", refreshCmd.Flags().Lookup("client-id"))
-	viper.BindPFlag("client-secret", refreshCmd.Flags().Lookup("client-secret"))
-	viper.BindPFlag("scope", refreshCmd.Flags().Lookup("scope"))
+	refreshCmd.Flags().StringVarP(&flowName, "flow", "f", "authorization_code", "OAuth2 flow")
 }
 
 func runRefresh(cmd *cobra.Command, args []string) error {
@@ -51,10 +46,10 @@ func runRefresh(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := &flow.Config{
-		TokenURL:     viper.GetString("token-url"),
-		ClientID:     viper.GetString("client-id"),
-		ClientSecret: viper.GetString("client-secret"),
-		Scope:        viper.GetString("scope"),
+		TokenURL:     mustGetString(cmd, "token-url"),
+		ClientID:     mustGetString(cmd, "client-id"),
+		ClientSecret: mustGetString(cmd, "client-secret"),
+		Scope:        mustGetString(cmd, "scope"),
 	}
 
 	newTok, err := f.Refresh(ctx, cfg, tok.RefreshToken)
