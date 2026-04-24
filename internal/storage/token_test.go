@@ -1,0 +1,29 @@
+package storage
+
+import (
+	"testing"
+
+	"github.com/lucaskatayama/oauth2-cli/internal/flow"
+)
+
+func TestTokenStorage(t *testing.T) {
+	tmp := t.TempDir()
+	s := &TokenStorage{baseDir: tmp}
+
+	tok := &flow.Token{AccessToken: "test-token", RefreshToken: "refresh", Expiry: 1234567890}
+	if err := s.Save(tok); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	loaded, err := s.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.AccessToken != tok.AccessToken {
+		t.Errorf("Load() AccessToken = %s, want %s", loaded.AccessToken, tok.AccessToken)
+	}
+
+	if err := s.Delete(); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+}
