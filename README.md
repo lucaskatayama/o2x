@@ -12,8 +12,8 @@ brew install lucaskatayama/tap/o2x
 ## Quick Start
 
 ```bash
-export OAUTH2_AUTH_URL=https://your-domain.auth0.com/authorize
-export OAUTH2_TOKEN_URL=https://your-domain.auth0.com/oauth/token
+export OAUTH2_AUTH_URL=https://your-provider.com/authorize
+export OAUTH2_TOKEN_URL=https://your-provider.com/oauth/token
 export OAUTH2_CLIENT_ID=your-client-id
 export OAUTH2_CLIENT_SECRET=your-client-secret
 
