@@ -87,6 +87,12 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: ./artifacts/o2x-*
+          working_directory: artifacts
+          files: |
+            o2x-linux-amd64.tar.gz
+            o2x-linux-arm64.tar.gz
+            o2x-darwin-amd64.tar.gz
+            o2x-darwin-arm64.tar.gz
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
