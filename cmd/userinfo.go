@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/lucaskatayama/oauth2-cli/internal/storage"
 )
 
@@ -19,7 +19,6 @@ var userinfoCmd = &cobra.Command{
 
 func init() {
 	userinfoCmd.Flags().String("auth-url", "", "OAuth2 authorization URL (used to construct userinfo URL)")
-	viper.BindPFlag("auth-url", userinfoCmd.Flags().Lookup("auth-url"))
 }
 
 func runUserInfo(cmd *cobra.Command, args []string) error {
@@ -32,7 +31,7 @@ func runUserInfo(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no token: %w", err)
 	}
 
-	userinfoURL := viper.GetString("auth-url")
+	userinfoURL := os.Getenv("OAUTH2_AUTH_URL")
 	if userinfoURL != "" {
 		u, err := url.Parse(userinfoURL)
 		if err == nil {
@@ -42,7 +41,7 @@ func runUserInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	if userinfoURL == "" {
-		return fmt.Errorf("--auth-url required for userinfo")
+		return fmt.Errorf("OAUTH2_AUTH_URL required for userinfo")
 	}
 
 	req, err := http.NewRequest("GET", userinfoURL, nil)

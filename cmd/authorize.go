@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -23,7 +24,7 @@ func init() {
 	authorizeCmd.Flags().String("token-url", "", "OAuth2 token URL")
 	authorizeCmd.Flags().String("client-id", "", "OAuth2 client ID")
 	authorizeCmd.Flags().String("client-secret", "", "OAuth2 client secret")
-	authorizeCmd.Flags().String("scope", "openid profile email", "OAuth2 scopes")
+	authorizeCmd.Flags().String("scope", "", "OAuth2 scopes")
 	authorizeCmd.Flags().String("redirect-uri", "o2x://callback", "OAuth2 redirect URI")
 	authorizeCmd.Flags().StringVarP(&flowName, "flow", "f", "authorization_code", "OAuth2 flow")
 }
@@ -38,13 +39,15 @@ func runAuthorize(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := &flow.Config{
-		AuthURL:      mustGetString(cmd, "auth-url"),
-		TokenURL:     mustGetString(cmd, "token-url"),
-		ClientID:     mustGetString(cmd, "client-id"),
-		ClientSecret: mustGetString(cmd, "client-secret"),
-		Scope:        mustGetString(cmd, "scope"),
-		RedirectURI:  mustGetString(cmd, "redirect-uri"),
+		AuthURL:      getEnv("OAUTH2_AUTH_URL"),
+		TokenURL:     getEnv("OAUTH2_TOKEN_URL"),
+		ClientID:     getEnv("OAUTH2_CLIENT_ID"),
+		ClientSecret: getEnv("OAUTH2_CLIENT_SECRET"),
+		Scope:        getEnvOrDefault("OAUTH2_SCOPE", "openid profile email"),
+		RedirectURI:  getEnv("OAUTH2_REDIRECT_URI"),
 	}
+
+	fmt.Printf("DEBUG cfg: %+v\n", cfg)
 
 	tok, err := f.Authorize(ctx, cfg)
 	if err != nil {
@@ -63,7 +66,16 @@ func runAuthorize(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func mustGetString(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
-	return val
+func getEnv(key string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return ""
+}
+
+func getEnvOrDefault(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
 }

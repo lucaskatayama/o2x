@@ -46,10 +46,10 @@ func runRefresh(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := &flow.Config{
-		TokenURL:     mustGetString(cmd, "token-url"),
-		ClientID:     mustGetString(cmd, "client-id"),
-		ClientSecret: mustGetString(cmd, "client-secret"),
-		Scope:        mustGetString(cmd, "scope"),
+		TokenURL:     getEnv("OAUTH2_TOKEN_URL"),
+		ClientID:     getEnv("OAUTH2_CLIENT_ID"),
+		ClientSecret: getEnv("OAUTH2_CLIENT_SECRET"),
+		Scope:        getEnvOrDefault("OAUTH2_SCOPE", "openid profile email"),
 	}
 
 	newTok, err := f.Refresh(ctx, cfg, tok.RefreshToken)

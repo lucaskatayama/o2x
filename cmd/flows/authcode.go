@@ -21,18 +21,16 @@ type AuthCodeFlow struct{}
 func (f *AuthCodeFlow) Name() string { return "authorization_code" }
 
 func (f *AuthCodeFlow) Authorize(ctx context.Context, cfg *flow.Config) (*flow.Token, error) {
-	redirectURI := cfg.RedirectURI
-	if redirectURI == "" {
-		redirectURI = "o2x://callback"
-	}
-
 	cb := callback.NewServer(0)
-	if _, err := cb.Start(); err != nil {
+	callbackURL, err := cb.Start()
+	if err != nil {
 		return nil, fmt.Errorf("callback server: %w", err)
 	}
 	defer cb.Close()
 
-	verifier := generateRandomString(32)
+	redirectURI := callbackURL
+
+	verifier := generateRandomString(64)
 	h := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(h[:])
 

@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: .tar.gz
+          - goos: linux
+            goarch: arm64
+            ext: .tar.gz
+          - goos: darwin
+            goarch: amd64
+            ext: .tar.gz
+          - goos: darwin
+            goarch: arm64
+            ext: .tar.gz
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          output_name="o2x-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            output_name="o2x-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+          fi
+          go build -ldflags="-s -w" -o "$output_name" ./main.go
+          
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            7z a -tzip "o2x-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "$output_name"
+            echo "artifact=o2x-${{ matrix.goos }}-${{ matrix.goarch }}.zip" >> $GITHUB_OUTPUT
+          else
+            tar -czvf "o2x-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "$output_name"
+            echo "artifact=o2x-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: o2x-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.build.outputs.artifact }}
+          retention-days: 5
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    if: env.HOMEBREW_TAP_REPO != ''
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_REPO" ]; then
+            echo "HOMEBREW_TAP_REPO not set, skipping Homebrew update"
+            exit 0
+          fi
+          
+          OWNER=$(echo "$HOMEBREW_TAP_REPO" | cut -d'/' -f1)
+          REPO=$(echo "$HOMEBREW_TAP_REPO" | cut -d'/' -f2)
+          
+          echo "Updating Homebrew tap: $OWNER/$REPO"
+          
+          git clone "https://x-access-token:$GITHUB_TOKEN@github.com/${OWNER}/${REPO}.git" /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+          
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          
+          FORMULA="Formula/o2x.rb"
+          if [ ! -f "$FORMULA" ]; then
+            FORMULA="Formula/o2x@${VERSION%%.*}.rb"
+          fi
+          
+          ARCHS=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64")
+          
+          {
+            echo "class O2x < Formula"
+            echo '  desc "OAuth2 CLI tool"'
+            echo '  homepage "https://github.com/lucaskatayama/oauth2-cli"'
+            echo "  version \"${VERSION}\""
+            echo ""
+            echo "  on_macos do"
+          } > "$FORMULA"
+          
+          for arch in "darwin/amd64" "darwin/arm64"; do
+            file=$(find ../artifacts -name "o2x-${arch}.tar.gz" | head -1)
+            if [ -n "$file" ]; then
+              sha=$(shasum -a 256 "$file" | cut -d' ' -f1)
+              os=$(echo "$arch" | cut -d'/' -f1)
+              arch_type=$(echo "$arch" | cut -d'/' -f2)
+              echo "  if OS.mac? && Hardware::CPU.${arch_type}?" >> "$FORMULA"
+              echo "    url \"https://github.com/lucaskatayama/oauth2-cli/releases/download/${TAG}/$(basename "$file")\"" >> "$FORMULA"
+              echo "    sha256 \"${sha}\"" >> "$FORMULA"
+              echo "  end" >> "$FORMULA"
+            fi
+          done
+          
+          echo "  end" >> "$FORMULA"
+          echo "" >> "$FORMULA"
+          echo "  on_linux do" >> "$FORMULA"
+          
+          for arch in "linux/amd64" "linux/arm64"; do
+            file=$(find ../artifacts -name "o2x-${arch}.tar.gz" | head -1)
+            if [ -n "$file" ]; then
+              sha=$(shasum -a 256 "$file" | cut -d' ' -f1)
+              os=$(echo "$arch" | cut -d'/' -f1)
+              arch_type=$(echo "$arch" | cut -d'/' -f2)
+              echo "  if OS.linux? && Hardware::CPU.${arch_type}?" >> "$FORMULA"
+              echo "    url \"https://github.com/lucaskatayama/oauth2-cli/releases/download/${TAG}/$(basename "$file")\"" >> "$FORMULA"
+              echo "    sha256 \"${sha}\"" >> "$FORMULA"
+              echo "  end" >> "$FORMULA"
+            fi
+          done
+          
+          echo "  end" >> "$FORMULA"
+          echo "" >> "$FORMULA"
+          cat >> "$FORMULA" << 'INSTALL_EOF'
+  def install
+    bin.install "o2x"
+  end
+
+  test do
+    system "#{bin}/o2x", "--version"
+  end
+end
+INSTALL_EOF
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update o2x to ${VERSION}"
+          git push

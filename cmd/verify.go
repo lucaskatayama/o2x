@@ -3,9 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/lucaskatayama/oauth2-cli/internal/jwt"
 	"github.com/lucaskatayama/oauth2-cli/internal/storage"
 )
@@ -18,7 +18,6 @@ var verifyCmd = &cobra.Command{
 
 func init() {
 	verifyCmd.Flags().String("jwks-uri", "", "JWKS URI for key validation")
-	viper.BindPFlag("jwks-uri", verifyCmd.Flags().Lookup("jwks-uri"))
 }
 
 func runVerify(cmd *cobra.Command, args []string) error {
@@ -31,7 +30,8 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no token: %w", err)
 	}
 
-	v := jwt.NewValidator(viper.GetString("jwks-uri"))
+	jwksURI := os.Getenv("OAUTH2_JWKS_URI")
+	v := jwt.NewValidator(jwksURI)
 
 	var tokenString string
 	if tok.IdToken != "" {

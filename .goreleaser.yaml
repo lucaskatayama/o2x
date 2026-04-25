@@ -1,0 +1,36 @@
+project_name: o2x
+
+archives:
+  - format: tarball
+    format_overrides:
+      - goos: windows
+        format: zip
+
+builds:
+  - id: o2x
+    binary: o2x
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+checksum:
+  targets:
+    - all
+
+release:
+  github:
+    owner: lucaskatayama
+    name: oauth2-cli
+  draft: false
+  name: "o2x {{ .Tag }}"
+  make_tag: true
+
+dist: dist

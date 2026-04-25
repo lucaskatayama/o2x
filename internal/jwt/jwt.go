@@ -37,6 +37,12 @@ func NewValidator(jwksURI string) *Validator {
 	}
 }
 
+type JWTParts struct {
+	Header    map[string]interface{}
+	Body      map[string]interface{}
+	Signature string
+}
+
 func (v *Validator) Decode(tokenString string) (*Claims, error) {
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
@@ -54,6 +60,39 @@ func (v *Validator) Decode(tokenString string) (*Claims, error) {
 	}
 
 	return &claims, nil
+}
+
+func DecodeJWT(tokenString string) (*JWTParts, error) {
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWT format")
+	}
+
+	headerBytes, err := base64Decode(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("decode header: %w", err)
+	}
+
+	var header map[string]interface{}
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		return nil, fmt.Errorf("unmarshal header: %w", err)
+	}
+
+	bodyBytes, err := base64Decode(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decode body: %w", err)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return nil, fmt.Errorf("unmarshal body: %w", err)
+	}
+
+	return &JWTParts{
+		Header:    header,
+		Body:      body,
+		Signature: parts[2],
+	}, nil
 }
 
 func (v *Validator) Validate(tokenString string) (*Claims, error) {
