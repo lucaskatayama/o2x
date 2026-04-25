@@ -165,13 +165,13 @@ jobs:
           echo "  end" >> "$FORMULA"
           echo "" >> "$FORMULA"
           cat >> "$FORMULA" << 'INSTALL_EOF'
-  def install
-    bin.install "o2x"
-  end
+    def install
+      bin.install "o2x"
+    end
 
-  test do
-    system "#{bin}/o2x", "--version"
-  end
+    test do
+      system "#{bin}/o2x", "--version"
+    end
 end
 INSTALL_EOF
           
