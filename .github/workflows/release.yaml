@@ -84,7 +84,8 @@ jobs:
       - name: List release files
         id: list-files
         run: |
-          find artifacts -type f -name "o2x-*" -printf "%p\n" >> "$GITHUB_OUTPUT"
+          files=$(find artifacts -type f -name "o2x-*" | tr '\n' ' ')
+          echo "release_files=$files" >> $GITHUB_OUTPUT
 
       - name: Create release
         id: create_release
