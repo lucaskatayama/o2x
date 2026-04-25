@@ -83,5 +83,8 @@ jobs:
         with:
           draft: false
           generate_release_notes: true
+          files: |
+            artifacts/o2x-*.tar.gz
+            artifacts/o2x-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
