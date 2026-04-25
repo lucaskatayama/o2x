@@ -81,18 +81,17 @@ jobs:
         with:
           path: artifacts
 
+      - name: List release files
+        id: list-files
+        run: |
+          find artifacts -type f -name "o2x-*" -printf "%p\n" >> "$GITHUB_OUTPUT"
+
       - name: Create release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          working_directory: artifacts
-          files: |
-            o2x-linux-amd64.tar.gz
-            o2x-linux-arm64.tar.gz
-            o2x-darwin-amd64.tar.gz
-            o2x-darwin-arm64.tar.gz
-          fail_on_unmatched_files: true
+          files: ${{ steps.list-files.outputs.release_files }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
