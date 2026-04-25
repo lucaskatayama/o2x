@@ -54,17 +54,19 @@ jobs:
           
           if [ "${{ matrix.goos }}" = "windows" ]; then
             7z a -tzip "o2x-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "$output_name"
-            echo "artifact=o2x-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
           else
             tar -czvf "o2x-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "$output_name"
-            echo "artifact=o2x-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
           fi
+          ls -la o2x-*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: o2x-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: "o2x-${{ matrix.goos }}-${{ matrix.goarch }}*"
+          path: |
+            o2x-${{ matrix.goos }}-${{ matrix.goarch }}
+            o2x-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            o2x-${{ matrix.goos }}-${{ matrix.goarch }}.zip
           retention-days: 5
 
   release:
