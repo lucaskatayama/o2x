@@ -4,3 +4,4 @@
 *.crt
 token.json
 o2x
+public/
