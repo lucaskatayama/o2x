@@ -1,7 +1,18 @@
 package callback
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"strconv"
+	"strings"
+	"time"
+
 	"github.com/lucaskatayama/oauth2-cli/internal/config"
 
 	"context"
@@ -10,6 +21,67 @@ import (
 	"net/http"
 )
 
+// generateSelfSignedCert creates a self-signed certificate for the given host.
+// Returns a tls.Certificate ready to use.
+func generateSelfSignedCert(host string) (tls.Certificate, error) {
+	// Generate ECDSA P-256 key (fast and suitable for dev)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// Prepare certificate template
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	org := "Dev"
+	if host != "" {
+		org = host
+	}
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{org},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(365 * 24 * time.Hour), // 1 year validity
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// If host looks like an IP, we could add IPAddresses, but for simplicity
+	// we add the host as DNSName and also localhost for convenience.
+	var dnsNames []string
+	if host != "" {
+		dnsNames = append(dnsNames, host)
+	}
+	// Always include localhost for loopback testing
+	dnsNames = append(dnsNames, "localhost")
+	template.DNSNames = dnsNames
+
+	// Create the self-signed certificate
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// PEM encode certificate and key
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+	privBytes, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes})
+
+	// Parse PEM data to tls.Certificate
+	return tls.X509KeyPair(certPEM, keyPEM)
+}
+
 type Result struct {
 	Code  string
 	State string
@@ -17,23 +89,29 @@ type Result struct {
 }
 
 type Server struct {
+	host     string
 	port     int
+	scheme   string // "http" or "https"
+	path     string
 	result   chan Result
 	listener net.Listener
 	server   *http.Server
 }
 
+// NewServer creates a new Server instance and resolves configuration from flags/env/defaults.
 func NewServer(_ int) *Server {
 	// Resolve callback configuration (host/port) using env vars or flags.
 	cfg, err := config.Resolve(nil)
 	if err != nil {
 		// Fallback to defaults on error
-		cfg = &config.CallbackConfig{URL: "http://localhost:9999/callback", Host: "localhost", Port: "9999"}
+		cfg = &config.CallbackConfig{URL: "http://localhost:9999/callback", Host: "localhost", Port: "9999", Scheme: "http", Path: "/callback"}
 	}
-	// Use resolved port; ignore passed argument.
 	portNum, _ := strconv.Atoi(cfg.Port)
 	return &Server{
+		host:   cfg.Host,
 		port:   portNum,
+		scheme: cfg.Scheme,
+		path:   cfg.Path,
 		result: make(chan Result, 1),
 	}
 }
@@ -44,16 +122,76 @@ func (s *Server) Start() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", fmt.Errorf("could not start callback listener on %s: %w", addr, err)
+	// Update server fields with latest config (in case flags changed)
+	s.host = cfg.Host
+	s.port, _ = strconv.Atoi(cfg.Port)
+	s.scheme = cfg.Scheme
+	s.path = cfg.Path
+	if s.path == "" {
+		s.path = "/callback"
+	}
+
+	bindHost := s.host
+	if bindHost == "" {
+		bindHost = "0.0.0.0"
+	}
+	if strings.EqualFold(bindHost, "localhost") {
+		bindHost = "0.0.0.0"
+	} else if ip := net.ParseIP(bindHost); ip != nil {
+		if ip.IsLoopback() || ip.IsUnspecified() {
+			bindHost = "0.0.0.0"
+		}
+	} else {
+		if resolved, err := net.LookupIP(bindHost); err == nil {
+			allLoopback := true
+			for _, ip := range resolved {
+				if !ip.IsLoopback() {
+					allLoopback = false
+					break
+				}
+			}
+			if allLoopback {
+				bindHost = "0.0.0.0"
+			}
+		}
+	}
+	addr := fmt.Sprintf("%s:%d", bindHost, s.port)
+	var ln net.Listener
+
+	if s.scheme == "https" {
+		// Generate self-signed certificate for the host
+		cert, err := generateSelfSignedCert(s.host)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate self-signed certificate: %w", err)
+		}
+		tlsCfg := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			// Use modern TLS settings
+			MinVersion: tls.VersionTLS12,
+		}
+		ln, err = tls.Listen("tcp", addr, tlsCfg)
+		if err != nil {
+			return "", fmt.Errorf("could not start HTTPS listener on %s: %w", addr, err)
+		}
+	} else {
+		ln, err = net.Listen("tcp", addr)
+		if err != nil {
+			return "", fmt.Errorf("could not start HTTP listener on %s: %w", addr, err)
+		}
 	}
 	s.listener = ln
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/callback", s.handle)
+	// Register handler for configured path (and allow optional trailing slash)
+	mux.HandleFunc(s.path, s.handle)
+	if trimmed := strings.TrimSuffix(s.path, "/"); trimmed != "" && trimmed != s.path {
+		mux.HandleFunc(trimmed, s.handle)
+	}
 	s.server = &http.Server{Handler: mux}
-	go s.server.Serve(s.listener)
+
+	// Start server in a goroutine
+	go s.server.Serve(ln)
+
 	return cfg.URL, nil
 }
 

@@ -1,13 +1,14 @@
 package cmd
 
 import (
+	"github.com/lucaskatayama/oauth2-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "o2x",
 	Short: "OAuth2 CLI with pluggable flows",
-	Long:  `OAuth2 CLI for authentication with various OAuth2 flows.
+	Long: `OAuth2 CLI for authentication with various OAuth2 flows.
 
 Environment variables:
   OAUTH2_AUTH_URL         Authorization URL
@@ -37,9 +38,10 @@ func Execute() error {
 }
 
 func init() {
-    // Callback configuration flags
-    rootCmd.PersistentFlags().String("callback-url", "", "Full callback URL (overrides host/port)")
-    rootCmd.PersistentFlags().String("callback-host", "", "Hostname for callback listener (default: localhost)")
-    rootCmd.PersistentFlags().String("callback-port", "", "Port for callback listener (default: 9999)" )
+	// Callback configuration flags
+	rootCmd.PersistentFlags().String("callback-url", "", "Full callback URL (overrides host/port)")
+	rootCmd.PersistentFlags().String("callback-host", "", "Hostname for callback listener (default: localhost)")
+	rootCmd.PersistentFlags().String("callback-port", "", "Port for callback listener (default: 9999)")
+	config.RegisterFlagSet(rootCmd.PersistentFlags())
 	rootCmd.AddCommand(authorizeCmd, tokenCmd, idTokenCmd, refreshCmd, revokeCmd, verifyCmd, introspectCmd, userinfoCmd, decodeCmd)
 }
