@@ -1,6 +1,9 @@
 package callback
 
 import (
+	"strconv"
+	"github.com/lucaskatayama/oauth2-cli/internal/config"
+
 	"context"
 	"fmt"
 	"net"
@@ -20,33 +23,38 @@ type Server struct {
 	server   *http.Server
 }
 
-func NewServer(port int) *Server {
-	if port == 0 {
-		port = 9999
+func NewServer(_ int) *Server {
+	// Resolve callback configuration (host/port) using env vars or flags.
+	cfg, err := config.Resolve(nil)
+	if err != nil {
+		// Fallback to defaults on error
+		cfg = &config.CallbackConfig{URL: "http://localhost:9999/callback", Host: "localhost", Port: "9999"}
 	}
+	// Use resolved port; ignore passed argument.
+	portNum, _ := strconv.Atoi(cfg.Port)
 	return &Server{
-		port:   port,
+		port:   portNum,
 		result: make(chan Result, 1),
 	}
 }
 
 func (s *Server) Start() (string, error) {
-	ports := []int{9999, 8080, 8000, 9000}
-	for _, port := range ports {
-		ln, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
-		if err == nil {
-			s.listener = ln
-			addr := ln.Addr().(*net.TCPAddr)
-
-			mux := http.NewServeMux()
-			mux.HandleFunc("/callback", s.handle)
-			s.server = &http.Server{Handler: mux}
-			go s.server.Serve(s.listener)
-
-			return fmt.Sprintf("http://localhost:%d/callback", addr.Port), nil
-		}
+	// Resolve configuration on each start to capture latest flag values.
+	cfg, err := config.Resolve(nil)
+	if err != nil {
+		return "", err
 	}
-	return "", fmt.Errorf("could not find available port (tried: %v)", ports)
+	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", fmt.Errorf("could not start callback listener on %s: %w", addr, err)
+	}
+	s.listener = ln
+	mux := http.NewServeMux()
+	mux.HandleFunc("/callback", s.handle)
+	s.server = &http.Server{Handler: mux}
+	go s.server.Serve(s.listener)
+	return cfg.URL, nil
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {

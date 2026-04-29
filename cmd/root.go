@@ -37,5 +37,9 @@ func Execute() error {
 }
 
 func init() {
+    // Callback configuration flags
+    rootCmd.PersistentFlags().String("callback-url", "", "Full callback URL (overrides host/port)")
+    rootCmd.PersistentFlags().String("callback-host", "", "Hostname for callback listener (default: localhost)")
+    rootCmd.PersistentFlags().String("callback-port", "", "Port for callback listener (default: 9999)" )
 	rootCmd.AddCommand(authorizeCmd, tokenCmd, idTokenCmd, refreshCmd, revokeCmd, verifyCmd, introspectCmd, userinfoCmd, decodeCmd)
 }
