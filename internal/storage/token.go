@@ -3,7 +3,6 @@ package storage
 import (
 	"encoding/json"
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/lucaskatayama/oauth2-cli/internal/flow"
@@ -14,15 +13,14 @@ type TokenStorage struct {
 }
 
 func NewTokenStorage() (*TokenStorage, error) {
-	usr, err := user.Current()
+	wd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
-	baseDir := filepath.Join(usr.HomeDir, ".config", "o2x")
-	if err := os.MkdirAll(baseDir, 0700); err != nil {
+	if err := os.MkdirAll(wd, 0700); err != nil {
 		return nil, err
 	}
-	return &TokenStorage{baseDir: baseDir}, nil
+	return &TokenStorage{baseDir: wd}, nil
 }
 
 func (s *TokenStorage) Save(tok *flow.Token) error {
